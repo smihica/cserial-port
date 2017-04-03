@@ -111,27 +111,27 @@
 
 (cffi:defcstruct dcb
   (DCBlength dword);      /* sizeof(DCB)                     */
-  (BaudRate dword);       /* Baudrate at which running       */
-  (dcbflags dword);
+  (BaudRate  dword);       /* Baudrate at which running       */
+  (dcbflags  dword);
   (wReserved word);       /* Not currently used              */
-  (XonLim word);          /* Transmit X-ON threshold         */
-  (XoffLim word);         /* Transmit X-OFF threshold        */
-  (ByteSize :uint8);        /* Number of bits/byte, 4-8        */
-  (Parity :uint8);          /* 0-4=None,Odd,Even,Mark,Space    */
-  (StopBits :uint8);        /* 0,1,2 = 1, 1.5, 2               */
-  (XonChar :char);         /* Tx and Rx X-ON character        */
-  (XoffChar :char);        /* Tx and Rx X-OFF character       */
+  (XonLim    word);          /* Transmit X-ON threshold         */
+  (XoffLim   word);         /* Transmit X-OFF threshold        */
+  (ByteSize  :uint8);        /* Number of bits/byte, 4-8        */
+  (Parity    :uint8);          /* 0-4=None,Odd,Even,Mark,Space    */
+  (StopBits  :uint8);        /* 0,1,2 = 1, 1.5, 2               */
+  (XonChar   :char);         /* Tx and Rx X-ON character        */
+  (XoffChar  :char);        /* Tx and Rx X-OFF character       */
   (ErrorChar :char);       /* Error replacement char          */
-  (EofChar :char);         /* End of Input character          */
-  (EvtChar :char);         /* Received Event character        */
+  (EofChar   :char);         /* End of Input character          */
+  (EvtChar   :char);         /* Received Event character        */
   (wReserved1 word));      /* Fill for now.                   */
 
 (cffi:defcstruct commtimeouts
-  (ReadIntervalTimeout dword)
-  (ReadTotalTimeoutMultiplier dword)
-  (ReadTotalTimeoutConstant dword)
+  (ReadIntervalTimeout         dword)
+  (ReadTotalTimeoutMultiplier  dword)
+  (ReadTotalTimeoutConstant    dword)
   (WriteTotalTimeoutMultiplier dword)
-  (WriteTotalTimeoutConstant dword))
+  (WriteTotalTimeoutConstant   dword))
 
 (cffi:defcstruct comstat
   (fCtsHold dword)
@@ -169,7 +169,7 @@
   (overlapped-u overlapped-u)
   (hEvent handle))
 
-(cffi:defctype lpoverlapped (:pointer overlapped))
+(cffi:defctype lpoverlapped (:pointer (:struct overlapped)))
 
 (cffi:defcstruct security-attributes
   (nLength dword)
@@ -197,7 +197,7 @@
   (lpNumberOfBytesTransferred lpword)
   (bWait :boolean))
 
-(cffi:defcfun (win32-purge-comm "PurgeComm" :convention :stdcall) bool
+(cffi:defcfun (win32-purge-comm "PurgeComm" :convention :stdcall) :boolean
   (hFile handle)
   (flags dword))
 
@@ -229,39 +229,43 @@
   (file :pointer)
   (escape dword))
 
-(cffi:defcfun (win32-set-comm-timeouts "SetCommTimeouts" :convention :stdcall) bool
-  (file :pointer)
-  (timeouts (:pointer commtimeouts)))
+(cffi:defcfun (win32-set-comm-timeouts "SetCommTimeouts" :convention :stdcall) :boolean
+  (file handle)
+  (timeouts (:pointer (:struct commtimeouts))))
 
-(cffi:defcfun (win32-set-comm-state "SetCommState" :convention :stdcall) bool
-  (file :pointer)
-  (dcb (:pointer dcb)))
+(cffi:defcfun (win32-set-comm-state "SetCommState" :convention :stdcall) :boolean
+  (file handle)
+  (dcb (:pointer (:struct dcb))))
 
-(cffi:defcfun (win32-get-comm-state "GetCommState" :convention :stdcall) bool
-  (file :pointer)
-  (dcb (:pointer dcb)))
+(cffi:defcfun (win32-get-comm-state "GetCommState" :convention :stdcall) :boolean
+  (file handle)
+  (dcb (:pointer (:struct dcb))))
 
 (cffi:defcfun (win32-memset "memset") :pointer
   (dest :pointer)
   (fill :int)
   (size :uint))
 
-(cffi:defcfun (win32-close-handle "CloseHandle" :convention :stdcall) bool
-  (object :pointer))
+(cffi:defcfun (win32-close-handle "CloseHandle" :convention :stdcall) :boolean
+  (file handle))
 
-(cffi:defcfun (win32-read-file "ReadFile" :convention :stdcall) bool
+(cffi:defcfun (win32-cancel-io-ex "CancelIoEx" :convention :stdcall) :boolean
   (file handle)
-  (buffer :pointer)
-  (size word)
-  (readBytes (:pointer word))
   (overlapped :pointer))
 
-(cffi:defcfun (win32-write-file "WriteFile" :convention :stdcall) bool
-  (file :pointer)
+(cffi:defcfun (win32-read-file "ReadFile" :convention :stdcall) :boolean
+  (file handle)
   (buffer :pointer)
-  (size word)
-  (writtenBytes (:pointer word))
-  (overlapped-p :pointer))
+  (size dword)
+  (readBytes (:pointer dword))
+  (overlapped lpoverlapped))
+
+(cffi:defcfun (win32-write-file "WriteFile" :convention :stdcall) :boolean
+  (file handle)
+  (buffer :pointer)
+  (size dword)
+  (writtenBytes (:pointer dword))
+  (overlapped lpoverlapped))
 
 (cffi:defcfun (win32-get-last-error "GetLastError" :convention :stdcall) dword)
 
@@ -343,7 +347,9 @@
 		  "COM~A") number))
 
 (defmethod %close ((s win32-serial))
-  (win32-close-handle (serial-fd s))
+  (win32-cancel-io-ex (serial-fd s) (cffi:null-pointer))
+  (unless (win32-close-handle (serial-fd s))
+    (error "Closing connection failed (~a)" (win32-get-last-error)))
   (%set-invalid-fd s)
   t)
 
@@ -353,7 +359,9 @@
   (let* ((null (cffi:null-pointer))
          (fd (win32-create-file name
                                 (logior +GENERIC_READ+ +GENERIC_WRITE+)
-                                0 null +OPEN_EXISTING+ +FILE_FLAG_OVERLAPPED+ null)))
+                                0 null +OPEN_EXISTING+
+                                +FILE_ATTRIBUTE_NORMAL+ ;+FILE_FLAG_OVERLAPPED+
+                                null)))
     (unless (valid-pointer-p fd)
       (error "Create file invalid pointer"))
     (setf (slot-value s 'fd) fd)
@@ -361,86 +369,68 @@
       (win32-memset ptr 0 (cffi:foreign-type-size '(:struct dcb)))
       (cffi:with-foreign-slots ((DCBlength) ptr (:struct dcb))
         (setf DCBlength (cffi:foreign-type-size '(:struct dcb))))
-      (win32-onerror (win32-get-comm-state fd ptr)
-                     (error "GetCommState failed"))
+      (unless (win32-get-comm-state fd ptr)
+        (%close s)
+        (error "GetCommState failed (~a)" (win32-get-last-error)))
       (cffi:with-foreign-slots ((baudrate bytesize parity stopbits dcbflags)
                                 ptr (:struct dcb))
         (setf baudrate (%baud-rate s))
         (setf bytesize (%data-bits s))
         (setf stopbits (%stop-bits s))
         (setf parity (%parity s))
-        (setf dcbflags (cffi:foreign-bitfield-value 'dcb-flags '(fbinary))))
-      (win32-onerror (win32-set-comm-state fd ptr)
-                     (error "SetCommState failed"))))
+        (setf dcbflags
+              (cffi:foreign-bitfield-value
+               'dcb-flags
+               '(fBinary      ;; binary mode
+                 fDtrControl1 ;; DTR_CONTROL_ENABLE 0x01
+                 fRtsControl1 ;; RTS_CONTROL_ENABLE 0x01
+                 ))))
+      (unless (win32-set-comm-state fd ptr)
+        (error "SetCommState failed (~a)" (win32-get-last-error))))
+    (cffi:with-foreign-object (ptr '(:struct commtimeouts))
+      (win32-memset ptr 0 (cffi:foreign-type-size '(:struct commtimeouts)))
+      (cffi:with-foreign-slots
+          ((ReadIntervalTimeout ReadTotalTimeoutMultiplier ReadTotalTimeoutConstant
+            WriteTotalTimeoutMultiplier WriteTotalTimeoutConstant) ptr (:struct commtimeouts))
+        (setf ReadIntervalTimeout +INFINITE+)
+        (setf ReadTotalTimeoutMultiplier 0)
+        (setf ReadTotalTimeoutConstant 0)
+        (setf WriteTotalTimeoutMultiplier 0)
+        (setf WriteTotalTimeoutConstant 0))
+      (unless (win32-set-comm-timeouts fd ptr)
+        (error "SetCommTimeouts failed (~a)" (win32-get-last-error))))
+    ;Reove garbase date in RX/TX queues
+    (win32-purge-comm fd +PURGE_RXCLEAR+)
+    (win32-purge-comm fd +PURGE_TXCLEAR+))
   s)
 
 (defmethod %write ((s win32-serial) buffer write-size timeout-ms)
-  (cffi:with-foreign-object (poverlapped '(:struct overlapped))
-    (win32-memset poverlapped 0 (cffi:foreign-type-size '(:struct overlapped)))
-    (let* ((null (cffi:null-pointer))
-           (evt (win32-create-event null t nil null)))
-      (unless (valid-pointer-p evt)
-        (error "Create event failed"))
-      (unwind-protect
-           (progn
-             (cffi:with-foreign-slots ((hEvent) poverlapped (:struct overlapped))
-               (setf hEvent evt))
-             (with-slots (fd) s
-               (cffi:with-foreign-object (writtenbytes 'word)
-                 (let ((rt (win32-write-file fd buffer write-size writtenbytes poverlapped)))
-                   (if (zerop rt)
-                       (let ((errno (win32-get-last-error)))
-                         (if (= errno +ERROR_IO_PENDING+)
-                             (let ((rt (cffi:with-foreign-slots ((hEvent) poverlapped (:struct overlapped))
-                                         (win32-wait-for-single-object hEvent (or timeout-ms +INFINITE+)))))
-                               (case rt
-                                 (#.+WAIT_OBJECT_0+
-                                  (let ((rt (win32-get-overlapped-result fd poverlapped writtenbytes nil)))
-                                    (if (null rt)
-                                        (error "Error on GetOverlappedResult (~a)" (win32-get-last-error))
-                                        (cffi:mem-ref writtenbytes 'word))))
-                                 (#.+WAIT_TIMEOUT+ (error 'timeout-error))
-                                 (otherwise
-                                  (error "Error on WaitForSingleObject (~a)" rt))))
-                             (error "Error on read (~a)" errno)))
-                       (cffi:mem-ref writtenbytes 'word))))))
-        (progn
-          (win32-reset-event evt)
-          (win32-close-handle evt))))))
+  (handler-case
+      (trivial-timeout:with-timeout ((/ timeout-ms 1000))
+        (with-slots (fd) s
+          (cffi:with-foreign-object (writtenbytes 'dword)
+            (loop
+               (unless (win32-write-file fd buffer write-size writtenbytes (cffi:null-pointer))
+                 (error "Error on WriteFile (~a)" (win32-get-last-error)))
+               (let ((b (cffi:mem-ref writtenbytes 'dword)))
+                 (if (= b 0)
+                     (sleep 1/1000) ; 1ms
+                     (return b)))))))
+    (trivial-timeout:timeout-error () (error 'timeout-error))))
 
 (defmethod %read ((s win32-serial) buffer buffer-size timeout-ms)
-  (cffi:with-foreign-object (poverlapped '(:struct overlapped))
-    (win32-memset poverlapped 0 (cffi:foreign-type-size '(:struct overlapped)))
-    (let* ((null (cffi:null-pointer))
-           (evt (win32-create-event null t nil null)))
-      (unless (valid-pointer-p evt)
-        (error "Create event failed"))
-      (unwind-protect
-           (progn
-             (cffi:with-foreign-slots ((hEvent) poverlapped (:struct overlapped))
-               (setf hEvent evt))
-             (with-slots (fd) s
-               (cffi:with-foreign-object (readbytes 'word)
-                 (let ((rt (win32-read-file fd buffer buffer-size readbytes poverlapped)))
-                   (if (zerop rt)
-                       (let ((errno (win32-get-last-error)))
-                         (if (= errno +ERROR_IO_PENDING+)
-                             (let ((rt (cffi:with-foreign-slots ((hEvent) poverlapped (:struct overlapped))
-                                         (win32-wait-for-single-object hEvent (or timeout-ms +INFINITE+)))))
-                               (case rt
-                                 (#.+WAIT_OBJECT_0+
-                                  (let ((rt (win32-get-overlapped-result fd poverlapped readbytes nil)))
-                                    (if (null rt)
-                                        (error "Error on GetOverlappedResult (~a)" (win32-get-last-error))
-                                        (cffi:mem-ref readbytes 'word))))
-                                 (#.+WAIT_TIMEOUT+ (error 'timeout-error))
-                                 (otherwise
-                                  (error "Error on WaitForSingleObject (~a)" rt))))
-                             (error "Error on read (~a)" errno)))
-                       (cffi:mem-ref readbytes 'word))))))
-        (progn
-          (win32-reset-event evt)
-          (win32-close-handle evt))))))
+  (handler-case
+      (trivial-timeout:with-timeout ((/ timeout-ms 1000))
+        (with-slots (fd) s
+          (cffi:with-foreign-object (readbytes 'dword)
+            (loop
+               (unless (win32-read-file fd buffer buffer-size readbytes (cffi:null-pointer))
+                 (error "Error on ReadFile (~a)" (win32-get-last-error)))
+               (let ((b (cffi:mem-ref readbytes 'dword)))
+                 (if (= b 0)
+                     (sleep 1/1000) ; 1ms
+                     (return b)))))))
+    (trivial-timeout:timeout-error () (error 'timeout-error))))
 
 
 
