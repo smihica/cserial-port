@@ -406,7 +406,7 @@
 
 (defmethod %write ((s win32-serial) buffer write-size timeout-ms)
   (handler-case
-      (trivial-timeout:with-timeout ((/ timeout-ms 1000))
+      (trivial-timeout:with-timeout ((/ (or timeout-ms +INFINITE+) 1000))
         (with-slots (fd) s
           (cffi:with-foreign-object (writtenbytes 'dword)
             (loop
@@ -420,7 +420,7 @@
 
 (defmethod %read ((s win32-serial) buffer buffer-size timeout-ms)
   (handler-case
-      (trivial-timeout:with-timeout ((/ timeout-ms 1000))
+      (trivial-timeout:with-timeout ((/ (or timeout-ms +INFINITE+) 1000))
         (with-slots (fd) s
           (cffi:with-foreign-object (readbytes 'dword)
             (loop
