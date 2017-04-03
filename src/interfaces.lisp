@@ -7,6 +7,9 @@
    (fd :initarg :fd
        :reader serial-fd
        :documentation "opend handle")
+   (nonblocking-p :initarg :nonblocking-p
+                  :reader serial-nonblocking-p
+                  :documentation "fd is nonblocking or no")
    (encoding :initarg :encoding
 	     :reader serial-encoding
 	     :documentation "encoding")
@@ -18,19 +21,13 @@
               :documentation "Number of data-bits.")
    (stop-bits :initarg :stop-bits
               :accessor serial-stop-bits
-	     :documentation "Number of stop-bits")
+              :documentation "Number of stop-bits")
    (parity :initarg :parity
 	   :accessor serial-parity
 	   :documentation "Parity checking."))
   (:documentation ""))
 
 (defvar *serial-class* 'serial)
-
-(define-condition timeout-error (error) ()
-  (:report (lambda (c s)
-             (declare (ignore c))
-             (format s "Process timeout")))
-  (:documentation "An error signaled when the duration specified in the [with-timeout][] is exceeded."))
 
 (defmacro defgeneric% (fname params &key export doc)
   `(progn
@@ -54,7 +51,7 @@
 (defgeneric% %default-name (class &optional number))
 
 (defgeneric% %close (class))
-(defgeneric% %open (class &key))
+(defgeneric% %open (class &key name))
 
-(defgeneric% %write (class buffer write-size timeout-ms))
-(defgeneric% %read  (class buffer buffer-size timeout-ms))
+(defgeneric% %write (class buffer write-size))
+(defgeneric% %read  (class buffer buffer-size))

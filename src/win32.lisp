@@ -353,15 +353,14 @@
   (%set-invalid-fd s)
   t)
 
-(defmethod %open ((s win32-serial)
-                  &key
-                    name)
+(defmethod %open ((s win32-serial) &key name)
   (let* ((null (cffi:null-pointer))
-         (fd (win32-create-file name
-                                (logior +GENERIC_READ+ +GENERIC_WRITE+)
-                                0 null +OPEN_EXISTING+
-                                +FILE_ATTRIBUTE_NORMAL+ ;+FILE_FLAG_OVERLAPPED+
-                                null)))
+         (fd (win32-create-file
+              name
+              (logior +GENERIC_READ+ +GENERIC_WRITE+)
+              0 null +OPEN_EXISTING+
+              +FILE_ATTRIBUTE_NORMAL+ ;+FILE_FLAG_OVERLAPPED+
+              null)))
     (unless (valid-pointer-p fd)
       (error "Create file invalid pointer"))
     (setf (slot-value s 'fd) fd)
@@ -392,7 +391,7 @@
       (cffi:with-foreign-slots
           ((ReadIntervalTimeout ReadTotalTimeoutMultiplier ReadTotalTimeoutConstant
             WriteTotalTimeoutMultiplier WriteTotalTimeoutConstant) ptr (:struct commtimeouts))
-        (setf ReadIntervalTimeout +INFINITE+)
+        (setf ReadIntervalTimeout (if (serial-nonblocking-p s) +INFINITE+ 0))
         (setf ReadTotalTimeoutMultiplier 0)
         (setf ReadTotalTimeoutConstant 0)
         (setf WriteTotalTimeoutMultiplier 0)
@@ -404,33 +403,19 @@
     (win32-purge-comm fd +PURGE_TXCLEAR+))
   s)
 
-(defmethod %write ((s win32-serial) buffer write-size timeout-ms)
-  (handler-case
-      (trivial-timeout:with-timeout ((/ (or timeout-ms +INFINITE+) 1000))
-        (with-slots (fd) s
-          (cffi:with-foreign-object (writtenbytes 'dword)
-            (loop
-               (unless (win32-write-file fd buffer write-size writtenbytes (cffi:null-pointer))
-                 (error "Error on WriteFile (~a)" (win32-get-last-error)))
-               (let ((b (cffi:mem-ref writtenbytes 'dword)))
-                 (if (= b 0)
-                     (sleep 1/1000) ; 1ms
-                     (return b)))))))
-    (trivial-timeout:timeout-error () (error 'timeout-error))))
+(defmethod %write ((s win32-serial) buffer write-size)
+  (with-slots (fd) s
+    (cffi:with-foreign-object (writtenbytes 'dword)
+      (unless (win32-write-file fd buffer write-size writtenbytes (cffi:null-pointer))
+        (error "Error on WriteFile (~a)" (win32-get-last-error)))
+      (cffi:mem-ref writtenbytes 'dword))))
 
-(defmethod %read ((s win32-serial) buffer buffer-size timeout-ms)
-  (handler-case
-      (trivial-timeout:with-timeout ((/ (or timeout-ms +INFINITE+) 1000))
-        (with-slots (fd) s
-          (cffi:with-foreign-object (readbytes 'dword)
-            (loop
-               (unless (win32-read-file fd buffer buffer-size readbytes (cffi:null-pointer))
-                 (error "Error on ReadFile (~a)" (win32-get-last-error)))
-               (let ((b (cffi:mem-ref readbytes 'dword)))
-                 (if (= b 0)
-                     (sleep 1/1000) ; 1ms
-                     (return b)))))))
-    (trivial-timeout:timeout-error () (error 'timeout-error))))
+(defmethod %read ((s win32-serial) buffer buffer-size)
+  (with-slots (fd) s
+    (cffi:with-foreign-object (readbytes 'dword)
+      (unless (win32-read-file fd buffer buffer-size readbytes (cffi:null-pointer))
+        (error "Error on ReadFile (~a)" (win32-get-last-error)))
+      (cffi:mem-ref readbytes 'dword))))
 
 
 

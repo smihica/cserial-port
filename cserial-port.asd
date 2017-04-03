@@ -9,7 +9,6 @@
                          "cffi-grovel")
   :depends-on ("trivial-features"
                "trivial-gray-streams"
-               "trivial-timeout"
                "cffi"
                (:feature (:not :windows) "cffi-grovel")
                (:feature (:not :windows) "osicat"))
