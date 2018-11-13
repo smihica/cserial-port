@@ -136,10 +136,39 @@
 (defmethod %write ((s posix-serial) buffer write-size timeout-ms)
   (declare (ignorable timeout-ms)) ;; not supported yet
   (with-slots (fd) s
-    ;;TODO: do something if return value is -1.
-    (write fd buffer write-size)))
+    (loop
+       (let ((write-result (write fd buffer write-size)))
+         (cond
+           ((< write-result 0)
+            (let ((errno-keyword
+                   (osicat-posix::foreign-enum-keyword
+                    'osicat-posix::errno-values (get-errno) :errorp nil)))
+              (case errno-keyword
+                ;; The call was interrupted by a signal before any data was written;
+                (:eintr :retry) ;; retry immediately
+                ((:eagain :ewouldblock)
+                 (sleep 0.005) :retry)  ;; retry after 5ms TODO use select
+                (otherwise
+                 (posix-error (get-errno) s 'write)))))
+           ((< write-result write-size)
+            (setf buffer (subseq buffer write-result))
+            (decf write-size write-result))
+           (:otherwise (return write-result)))))))
 
 (defmethod %read ((s posix-serial) buffer buffer-size timeout-ms)
   (declare (ignorable timeout-ms)) ;; not supported yet
   (with-slots (fd) s
-    (read fd buffer buffer-size)))
+    (loop
+       (let ((read-result (read fd buffer buffer-size)))
+         (cond
+           ((< read-result 0)
+            (let ((errno-keyword
+                   (osicat-posix::foreign-enum-keyword
+                    'osicat-posix::errno-values (get-errno) :errorp nil)))
+              (case errno-keyword
+                (:eintr :retry) ;; retry immediately
+                ((:eagain :ewouldblock)
+                 (sleep 0.005) :retry)  ;; retry after 5ms TODO use select
+                (otherwise
+                 (posix-error (get-errno) s 'read)))))
+           (:otherwise (return read-result)))))))

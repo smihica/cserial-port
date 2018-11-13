@@ -6,7 +6,7 @@
   #-windows
   (:shadowing-import-from :osicat-posix :open :close :write :read)
   #-windows
-  (:import-from :osicat-posix :o-rdwr :o-noctty :o-ndelay :getpgrp :fcntl :f-setfl)
+  (:import-from :osicat-posix :o-rdwr :o-noctty :o-ndelay :getpgrp :fcntl :f-setfl :get-errno :posix-error)
   (:import-from :cffi
                 :defcfun
                 :with-foreign-object
