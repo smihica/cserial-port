@@ -155,8 +155,12 @@ If timeout is non-nil then the function will return nil after that many seconds 
   "Writes bytes to a serial port. will return written-bytes count."
   (unless (%valid-fd-p serial)
     (error "invalid serial port ~S" serial))
-  (cffi:with-pointer-to-vector-data (data-sap bytes)
-    (%write serial data-sap (- end start) timeout-ms)))
+  (cffi:with-foreign-object (buf-sap :unsigned-char (- end start))
+    (loop
+       for i from start to (1- end)
+       for j from 0     to (1- (- end start))
+       do (setf (cffi:mem-aref buf-sap :unsigned-char j) (aref bytes i)))
+    (%write serial buf-sap (- end start) timeout-ms)))
 
 ;;more
 
