@@ -1,43 +1,26 @@
 ;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
 
-'#.(progn
-     #+quicklisp
-     (ql:quickload :trivial-features :silent t)
-     #-quicklisp
-     (asdf:load-system :trivial-features :verbose nil))
-
-#-windows
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  #+quicklisp
-  (ql:quickload :cffi-grovel :silent t)
-  #-quicklisp
-  (asdf:load-system :cffi-grovel :verbose nil))
-
-(cl:in-package :cl-user)
-
-(asdf:defsystem :cserial-port
+(defsystem "cserial-port"
   :description "library for serial communication inspired by lispworks' serial-port"
   :author "Masatoshi SANO <snmsts@gmail.com>"
   :version "0.0.3"
   :licence "MIT"
-  #-windows :defsystem-depends-on #-windows (:cffi-grovel)
-  :depends-on (:trivial-features
-               :trivial-gray-streams
-               :cffi
-               #-windows :cffi-grovel
-               #-windows :osicat)
+  :defsystem-depends-on ("trivial-features"
+                         "cffi-grovel")
+  :depends-on ("trivial-features"
+               "trivial-gray-streams"
+               "cffi"
+               (:feature (:not :windows) "cffi-grovel")
+               (:feature (:not :windows) "osicat"))
+  :serial t
   :components
   ((:module "src"
             :components
             ((:file "package")
              (:file "interfaces")
-             #-windows
-             (cffi-grovel:grovel-file "ffi-types" :pathname
-                                      "ffi-types-unix")
-             #-windows
-             (:file "posix")
-             #+windows
-             (:file "win32")
+             (:cffi-grovel-file "ffi-types" :if-feature (:not :windows)
+              :pathname "ffi-types-unix")
+             (:file "posix" :if-feature (:not :windows))
+             (:file "win32" :if-feature :windows)
              (:file "main")
-             (:file "gray"))))
-  :serial t)
+             (:file "gray")))))
