@@ -90,7 +90,7 @@ The result state is a list giving the state of each line in the same order as th
   (unless (%valid-fd-p serial)
     (error "invalid serial port ~S" serial))
   (cffi:with-foreign-object (buf-sap :unsigned-char (- end start))
-    (let ((bytes (%read serial buf-sap (- end start) timeout-ms)))
+    (let ((bytes (%read serial buf-sap (- end start))))
       (loop
          for i from start to (+ start (1- bytes))
          for j from 0     to (1- bytes)
@@ -160,7 +160,7 @@ If timeout is non-nil then the function will return nil after that many seconds 
        for i from start to (1- end)
        for j from 0     to (1- (- end start))
        do (setf (cffi:mem-aref buf-sap :unsigned-char j) (aref bytes i)))
-    (%write serial buf-sap (- end start) timeout-ms)))
+    (%write serial buf-sap (- end start))))
 
 ;;more
 
