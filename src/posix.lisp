@@ -102,9 +102,7 @@
   (%set-invalid-fd s)
   t)
 
-(defmethod %open ((s posix-serial)
-		  &key
-		    name)
+(defmethod %open ((s posix-serial) &key name)
   (let* ((ratedef (%baud-rate s))
 	 (fd (open name (logior o-rdwr o-noctty))))
     (when (= -1 fd)
@@ -133,13 +131,11 @@
 	(error "unable to setup serial port"))
       s)))
 
-(defmethod %write ((s posix-serial) buffer write-size timeout-ms)
-  (declare (ignorable timeout-ms)) ;; not supported yet
+(defmethod %write ((s posix-serial) buffer write-size)
   (with-slots (fd) s
     ;;TODO: do something if return value is -1.
     (write fd buffer write-size)))
 
-(defmethod %read ((s posix-serial) buffer buffer-size timeout-ms)
-  (declare (ignorable timeout-ms)) ;; not supported yet
+(defmethod %read ((s posix-serial) buffer buffer-size)
   (with-slots (fd) s
     (read fd buffer buffer-size)))
